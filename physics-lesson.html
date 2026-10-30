@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Mechanics Phenomena Visualized</title>
+<style>
+  :root {
+    --bg: #05070d;
+    --panel: rgba(10, 16, 28, 0.72);
+    --panel-border: rgba(0, 229, 255, 0.25);
+    --accent: #00e5ff;
+    --accent-soft: rgba(0, 229, 255, 0.15);
+    --text: #cfe9ff;
+    --text-dim: #7d93ad;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+    user-select: none;
+  }
+
+  /* Subtle starfield behind canvas */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(1px 1px at 20% 30%, rgba(255,255,255,0.6), transparent 50%),
+      radial-gradient(1px 1px at 70% 60%, rgba(255,255,255,0.4), transparent 50%),
+      radial-gradient(1px 1px at 40% 80%, rgba(255,255,255,0.35), transparent 50%),
+      radial-gradient(1.5px 1.5px at 85% 15%, rgba(180,220,255,0.5), transparent 50%),
+      radial-gradient(1px 1px at 55% 45%, rgba(255,255,255,0.3), transparent 50%),
+      radial-gradient(circle at 50% 50%, #070b16 0%, #05070d 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Title bar */
+  .title-bar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(180deg, rgba(8,14,26,0.9), rgba(8,14,26,0.4));
+    border-bottom: 1px solid var(--panel-border);
+    backdrop-filter: blur(8px);
+    z-index: 10;
+  }
+
+  .title-bar h1 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--accent);
+    text-shadow: 0 0 10px rgba(0, 229, 255, 0.6), 0 0 22px rgba(0, 229, 255, 0.25);
+    font-family: "Consolas", "Courier New", monospace;
+  }
+
+  /* Canvas */
+  #stage {
+    position: fixed;
+    top: 56px; left: 0;
+    width: 100%;
+    height: calc(100% - 56px);
+    display: block;
+    cursor: crosshair;
+    z-index: 1;
+  }
+
+  /* Control panel */
+  .panel {
+    position: fixed;
+    top: 76px;
+    left: 16px;
+    width: 240px;
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 0 22px rgba(0, 229, 255, 0.08), inset 0 0 18px rgba(0, 229, 255, 0.03);
+    z-index: 20;
+    font-size: 0.82rem;
+  }
+
+  .panel h2 {
+    font-size: 0.72rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(0, 229, 255, 0.15);
+    font-family: "Consolas", monospace;
+  }
+
+  .control { margin-bottom: 12px; }
+  .control:last-child { margin-bottom: 0; }
+
+  .control label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: var(--text-dim);
+    font-size: 0.78rem;
+    margin-bottom: 5px;
+    letter-spacing: 0.03em;
+  }
+  .control label .val {
+    color: var(--accent);
+    font-family: "Consolas", monospace;
+    font-size: 0.78rem;
+  }
+
+  input[type="range"] {
+    width: 100%;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 4px;
+    background: linear-gradient(90deg, var(--accent) var(--pct, 50%), rgba(255,255,255,0.1) var(--pct, 50%));
+    border-radius: 2px;
+    outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid #05070d;
+    box-shadow: 0 0 8px var(--accent);
+    cursor: pointer;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid #05070d;
+    box-shadow: 0 0 8px var(--accent);
+    cursor: pointer;
+  }
+
+  /* Toggles */
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .toggle-row span {
+    color: var(--text-dim);
+    font-size: 0.78rem;
+  }
+  .switch {
+    position: relative;
+    width: 38px; height: 20px;
+    flex-shrink: 0;
+  }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider-sw {
+    position: absolute; inset: 0;
+    background: rgba(255,255,255,0.1);
+    border-radius: 20px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .slider-sw::before {
+    content: "";
+    position: absolute;
+    height: 14px; width: 14px;
+    left: 3px; top: 3px;
+    background: #8aa0b8;
+    border-radius: 50%;
+    transition: transform 0.2s, background 0.2s;
+  }
+  .switch input:checked + .slider-sw {
+    background: var(--accent-soft);
+    box-shadow: inset 0 0 6px rgba(0,229,255,0.4);
+  }
+  .switch input:checked + .slider-sw::before {
+    transform: translateX(18px);
+    background: var(--accent);
+    box-shadow: 0 0 6px var(--accent);
+  }
+
+  .divider {
+    height: 1px;
+    background: rgba(0, 229, 255, 0.12);
+    margin: 12px 0;
+  }
+
+  /* Buttons */
+  .btn-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .btn-row .full { grid-column: 1 / -1; }
+
+  .pbtn {
+    padding: 8px 10px;
+    font-size: 0.78rem;
+    letter-spacing: 0.05em;
+    color: var(--text);
+    background: rgba(0, 229, 255, 0.07);
+    border: 1px solid rgba(0, 229, 255, 0.3);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    font-family: inherit;
+  }
+  .pbtn:hover {
+    background: rgba(0, 229, 255, 0.18);
+    border-color: var(--accent);
+    box-shadow: 0 0 10px rgba(0, 229, 255, 0.25);
+  }
+  .pbtn.active {
+    background: var(--accent);
+    color: #05070d;
+    border-color: var(--accent);
+    font-weight: 600;
+    box-shadow: 0 0 12px rgba(0, 229, 255, 0.5);
+  }
+
+  /* Ball count (top-right) */
+  .counter {
+    position: fixed;
+    top: 76px;
+    right: 16px;
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    padding: 12px 18px;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 0 22px rgba(0, 229, 255, 0.08);
+    z-index: 20;
+    text-align: right;
+  }
+  .counter .label {
+    font-size: 0.68rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    font-family: "Consolas", monospace;
+  }
+  .counter .num {
+    font-size: 1.9rem;
+    font-weight: 700;
+    color: var(--accent);
+    font-family: "Consolas", monospace;
+    line-height: 1.1;
+    text-shadow: 0 0 12px rgba(0, 229, 255, 0.5);
+  }
+
+  /* Instruction hint (bottom center) */
+  .hint {
+    position: fixed;
+    bottom: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 999px;
+    padding: 8px 22px;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 0 18px rgba(0, 229, 255, 0.08);
+    z-index: 20;
+    font-size: 0.82rem;
+    color: var(--text-dim);
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+  }
+  .hint b { color: var(--accent); font-weight: 600; }
+
+  /* Drag preview line */
+  .drag-line {
+    position: fixed;
+    pointer-events: none;
+    z-index: 15;
+    color: var(--accent);
+  }
+
+  @media (max-width: 640px) {
+    .panel { width: calc(100% - 32px); max-width: 260px; }
+    .counter { padding: 8px 12px; }
+    .counter .num { font-size: 1.4rem; }
+    .hint { font-size: 0.72rem; padding: 7px 14px; white-space: normal; text-align: center; max-width: 90%; }
+  }
+</style>
+</head>
+<body>
+
+<div class="title-bar">
+  <h1>Mechanics Phenomena Visualized</h1>
+</div>
+
+<canvas id="stage"></canvas>
+
+<!-- Control panel -->
+<div class="panel" id="panel">
+  <h2>Controls</h2>
+
+  <div class="control">
+    <label>Gravity (G) <span class="val" id="gVal">1.00</span></label>
+    <input type="range" id="gSlider" min="0" max="3" step="0.01" value="1" />
+  </div>
+
+  <div class="control">
+    <label>Expansion <span class="val" id="expVal">0.00</span></label>
+    <input type="range" id="expSlider" min="0" max="1" step="0.01" value="0" />
+  </div>
+
+  <div class="control">
+    <label>New ball mass <span class="val" id="massVal">10</span></label>
+    <input type="range" id="massSlider" min="1" max="100" step="1" value="10" />
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="toggle-row">
+    <span>Motion trails</span>
+    <label class="switch">
+      <input type="checkbox" id="trailToggle" checked />
+      <span class="slider-sw"></span>
+    </label>
+  </div>
+
+  <div class="toggle-row">
+    <span>Merge on collision</span>
+    <label class="switch">
+      <input type="checkbox" id="mergeToggle" checked />
+      <span class="slider-sw"></span>
+    </label>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="btn-row">
+    <button class="pbtn" id="pauseBtn">Pause</button>
+    <button class="pbtn" id="clearBtn">Clear</button>
+    <button class="pbtn full" id="galaxyBtn">Galaxy</button>
+    <button class="pbtn full" id="binaryBtn">Binary</button>
+  </div>
+</div>
+
+<!-- Ball counter -->
+<div class="counter">
+  <div class="label">Bodies</div>
+  <div class="num" id="ballCount">0</div>
+</div>
+
+<!-- Instruction hint -->
+<div class="hint">
+  Drag to launch a body — Click to place at rest — sliders tune <b>G</b> &amp; <b>expansion</b>
+</div>
+
+<script>
+"use strict";
+
+const canvas = document.getElementById("stage");
+const ctx = canvas.getContext("2d");
+
+// ----- State -----
+const state = {
+  bodies: [],
+  G: 1.0,
+  expansion: 0.0,
+  newMass: 10,
+  showTrails: true,
+  mergeEnabled: true,
+  paused: false,
+  drag: null,      // { x, y } start point while dragging
+  mouse: { x: 0, y: 0 },
+};
+
+// Physical tuning constants
+const SOFTENING = 4;            // gravity softening (avoids singularity)
+const DT = 0.5;                 // base timestep
+const SUBSTEPS = 2;             // physics substeps per frame for stability
+const DENSITY = 0.4;            // mass -> radius: r = (mass / DENSITY)^(1/3) * k
+const RADIUS_K = 2.2;
+
+// ----- Helpers -----
+function radiusFromMass(m) {
+  return Math.pow(m / DENSITY, 1 / 3) * RADIUS_K;
+}
+
+// Map mass to color: low mass -> bluish-white, high mass -> red/orange
+function colorFromMass(m) {
+  // normalize mass into 0..1 range (log-ish)
+  const t = Math.min(1, Math.log10(m + 1) / Math.log10(3000));
+  // hue: 210 (blue) -> 10 (red/orange)
+  const hue = 210 - 200 * t;
+  // lightness: high for small (white-blue), lower for large (deep red)
+  const light = 72 - 30 * t;
+  const sat = 70 + 20 * t;
+  return `hsl(${hue}, ${sat}%, ${light}%)`;
+}
+
+function makeBody(x, y, vx, vy, mass) {
+  return { x, y, vx, vy, mass, r: radiusFromMass(mass) };
+}
+
+// ----- Canvas sizing -----
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.floor(window.innerWidth * dpr);
+  canvas.height = Math.floor((window.innerHeight - 56) * dpr);
+  canvas.style.width = window.innerWidth + "px";
+  canvas.style.height = (window.innerHeight - 56) + "px";
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener("resize", resize);
+resize();
+
+function viewW() { return window.innerWidth; }
+function viewH() { return window.innerHeight - 56; }
+function centerX() { return viewW() / 2; }
+function centerY() { return viewH() / 2; }
+
+// ----- Physics -----
+function stepPhysics(dt) {
+  const bodies = state.bodies;
+  const n = bodies.length;
+  const G = state.G * 60; // scale G for visible motion
+  const exp = state.expansion * 0.0008;
+
+  // Compute accelerations
+  const ax = new Float64Array(n);
+  const ay = new Float64Array(n);
+
+  for (let i = 0; i < n; i++) {
+    const bi = bodies[i];
+    for (let j = i + 1; j < n; j++) {
+      const bj = bodies[j];
+      let dx = bj.x - bi.x;
+      let dy = bj.y - bi.y;
+      const distSq = dx * dx + dy * dy + SOFTENING * SOFTENING;
+      const invDist = 1 / Math.sqrt(distSq);
+      const invDist3 = invDist * invDist * invDist;
+      const f = G * invDist3;
+      const fx = dx * f;
+      const fy = dy * f;
+      ax[i] += fx * bj.mass;
+      ay[i] += fy * bj.mass;
+      ax[j] -= fx * bi.mass;
+      ay[j] -= fy * bi.mass;
+    }
+  }
+
+  // Universe expansion: outward acceleration from center of mass
+  if (exp > 0 && n > 0) {
+    let cx = 0, cy = 0, mtot = 0;
+    for (let i = 0; i < n; i++) { cx += bodies[i].x * bodies[i].mass; cy += bodies[i].y * bodies[i].mass; mtot += bodies[i].mass; }
+    cx /= mtot; cy /= mtot;
+    for (let i = 0; i < n; i++) {
+      ax[i] += (bodies[i].x - cx) * exp;
+      ay[i] += (bodies[i].y - cy) * exp;
+    }
+  }
+
+  // Integrate (semi-implicit Euler)
+  for (let i = 0; i < n; i++) {
+    const b = bodies[i];
+    b.vx += ax[i] * dt;
+    b.vy += ay[i] * dt;
+    b.x += b.vx * dt;
+    b.y += b.vy * dt;
+  }
+
+  // Collisions / merging
+  if (state.mergeEnabled) {
+    handleMerging();
+  }
+}
+
+function handleMerging() {
+  const bodies = state.bodies;
+  let merged = true;
+  while (merged) {
+    merged = false;
+    outer:
+    for (let i = 0; i < bodies.length; i++) {
+      for (let j = i + 1; j < bodies.length; j++) {
+        const a = bodies[i], b = bodies[j];
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < a.r + b.r) {
+          // Merge: conserve momentum & mass
+          const m = a.mass + b.mass;
+          const nx = (a.x * a.mass + b.x * b.mass) / m;
+          const ny = (a.y * a.mass + b.y * b.mass) / m;
+          const nvx = (a.vx * a.mass + b.vx * b.mass) / m;
+          const nvy = (a.vy * a.mass + b.vy * b.mass) / m;
+          const mergedBody = makeBody(nx, ny, nvx, nvy, m);
+          // remove a and b, add merged
+          bodies.splice(j, 1);
+          bodies.splice(i, 1);
+          bodies.push(mergedBody);
+          merged = true;
+          break outer;
+        }
+      }
+    }
+  }
+}
+
+// ----- Rendering -----
+function render() {
+  const w = viewW(), h = viewH();
+
+  if (state.showTrails) {
+    // Fade previous frame for motion trails
+    ctx.fillStyle = "rgba(5, 7, 13, 0.22)";
+    ctx.fillRect(0, 0, w, h);
+  } else {
+    ctx.fillStyle = "#05070d";
+    ctx.fillRect(0, 0, w, h);
+  }
+
+  // Draw bodies
+  for (const b of state.bodies) {
+    drawBody(b);
+  }
+
+  // Draw drag preview
+  if (state.drag) {
+    const d = state.drag;
+    const dx = state.mouse.x - d.x;
+    const dy = state.mouse.y - d.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    // ghost ball at launch point
+    const r = radiusFromMass(state.newMass);
+    ctx.beginPath();
+    ctx.arc(d.x, d.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(0, 229, 255, 0.25)";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(0, 229, 255, 0.8)";
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // velocity vector (slingshot: opposite to drag)
+    const vx = -dx * 0.15;
+    const vy = -dy * 0.15;
+    ctx.beginPath();
+    ctx.moveTo(d.x, d.y);
+    ctx.lineTo(d.x + vx, d.y + vy);
+    ctx.strokeStyle = "rgba(0, 229, 255, 0.9)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // arrowhead
+    const ang = Math.atan2(vy, vx);
+    const len = Math.min(14, dist * 0.15);
+    ctx.beginPath();
+    ctx.moveTo(d.x + vx, d.y + vy);
+    ctx.lineTo(d.x + vx - len * Math.cos(ang - 0.5), d.y + vy - len * Math.sin(ang - 0.5));
+    ctx.moveTo(d.x + vx, d.y + vy);
+    ctx.lineTo(d.x + vx - len * Math.cos(ang + 0.5), d.y + vy - len * Math.sin(ang + 0.5));
+    ctx.stroke();
+  }
+}
+
+function drawBody(b) {
+  const color = colorFromMass(b.mass);
+  // glow
+  ctx.save();
+  ctx.shadowColor = color;
+  ctx.shadowBlur = b.r * 1.6;
+  ctx.beginPath();
+  ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.restore();
+
+  // bright core highlight
+  const grad = ctx.createRadialGradient(
+    b.x - b.r * 0.3, b.y - b.r * 0.3, b.r * 0.1,
+    b.x, b.y, b.r
+  );
+  grad.addColorStop(0, "rgba(255,255,255,0.85)");
+  grad.addColorStop(0.4, "rgba(255,255,255,0.15)");
+  grad.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.beginPath();
+  ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+  ctx.fillStyle = grad;
+  ctx.fill();
+}
+
+// ----- Main loop -----
+function loop() {
+  if (!state.paused) {
+    const dt = DT / SUBSTEPS;
+    for (let s = 0; s < SUBSTEPS; s++) {
+      stepPhysics(dt);
+    }
+  }
+  render();
+  updateCounter();
+  requestAnimationFrame(loop);
+}
+
+// ----- Counter -----
+const ballCountEl = document.getElementById("ballCount");
+function updateCounter() {
+  ballCountEl.textContent = state.bodies.length;
+}
+
+// ----- Scenes -----
+function clearBodies() {
+  state.bodies = [];
+}
+
+function spawnGalaxy() {
+  clearBodies();
+  const cx = centerX(), cy = centerY();
+  const starMass = 6000;
+  // central big star
+  state.bodies.push(makeBody(cx, cy, 0, 0, starMass));
+
+  const G = state.G * 60;
+  const count = 14;
+  for (let i = 0; i < count; i++) {
+    const angle = (i / count) * Math.PI * 2 + Math.random() * 0.3;
+    const r = 90 + Math.random() * 260;
+    const x = cx + Math.cos(angle) * r;
+    const y = cy + Math.sin(angle) * r;
+    // circular orbit speed: v = sqrt(G*M/r)
+    const speed = Math.sqrt((G * starMass) / r);
+    // tangential velocity (perpendicular to radius)
+    const vx = -Math.sin(angle) * speed;
+    const vy = Math.cos(angle) * speed;
+    const mass = 3 + Math.random() * 14;
+    state.bodies.push(makeBody(x, y, vx, vy, mass));
+  }
+}
+
+function spawnBinary() {
+  clearBodies();
+  const cx = centerX(), cy = centerY();
+  const G = state.G * 60;
+  const m1 = 2500, m2 = 2500;
+  const sep = 120; // distance between the two stars
+  // Place them symmetrically around center, orbiting their common COM
+  const r1 = sep / 2, r2 = sep / 2;
+  const x1 = cx - r1, y1 = cy;
+  const x2 = cx + r2, y2 = cy;
+  // orbital speed for each around COM: v = sqrt(G * m_other^2 / ((m1+m2) * r))
+  const v = Math.sqrt((G * m2 * m2) / ((m1 + m2) * r1));
+  state.bodies.push(makeBody(x1, y1, 0, -v, m1));
+  state.bodies.push(makeBody(x2, y2, 0, v, m2));
+
+  // Outer asteroids orbiting the binary COM
+  const M = m1 + m2;
+  const astCount = 18;
+  for (let i = 0; i < astCount; i++) {
+    const angle = (i / astCount) * Math.PI * 2 + Math.random() * 0.4;
+    const r = 200 + Math.random() * 220;
+    const x = cx + Math.cos(angle) * r;
+    const y = cy + Math.sin(angle) * r;
+    const speed = Math.sqrt((G * M) / r);
+    const vx = -Math.sin(angle) * speed;
+    const vy = Math.cos(angle) * speed;
+    const mass = 1 + Math.random() * 5;
+    state.bodies.push(makeBody(x, y, vx, vy, mass));
+  }
+}
+
+// ----- Controls -----
+function bindSlider(id, valId, onChange, fmt) {
+  const slider = document.getElementById(id);
+  const valEl = document.getElementById(valId);
+  const update = () => {
+    const v = parseFloat(slider.value);
+    valEl.textContent = fmt ? fmt(v) : v;
+    onChange(v);
+    slider.style.setProperty("--pct", ((slider.value - slider.min) / (slider.max - slider.min) * 100) + "%");
+  };
+  slider.addEventListener("input", update);
+  update();
+}
+
+bindSlider("gSlider", "gVal", v => { state.G = v; }, v => v.toFixed(2));
+bindSlider("expSlider", "expVal", v => { state.expansion = v; }, v => v.toFixed(2));
+bindSlider("massSlider", "massVal", v => { state.newMass = v; }, v => String(Math.round(v)));
+
+document.getElementById("trailToggle").addEventListener("change", e => {
+  state.showTrails = e.target.checked;
+});
+document.getElementById("mergeToggle").addEventListener("change", e => {
+  state.mergeEnabled = e.target.checked;
+});
+
+const pauseBtn = document.getElementById("pauseBtn");
+pauseBtn.addEventListener("click", () => {
+  state.paused = !state.paused;
+  pauseBtn.textContent = state.paused ? "Resume" : "Pause";
+  pauseBtn.classList.toggle("active", state.paused);
+});
+
+document.getElementById("clearBtn").addEventListener("click", clearBodies);
+document.getElementById("galaxyBtn").addEventListener("click", spawnGalaxy);
+document.getElementById("binaryBtn").addEventListener("click", spawnBinary);
+
+// ----- Mouse interaction -----
+function getMouse(e) {
+  const rect = canvas.getBoundingClientRect();
+  return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+}
+
+canvas.addEventListener("mousedown", e => {
+  const p = getMouse(e);
+  state.drag = { x: p.x, y: p.y };
+});
+
+canvas.addEventListener("mousemove", e => {
+  const p = getMouse(e);
+  state.mouse.x = p.x;
+  state.mouse.y = p.y;
+});
+
+canvas.addEventListener("mouseup", e => {
+  if (!state.drag) return;
+  const p = getMouse(e);
+  const dx = p.x - state.drag.x;
+  const dy = p.y - state.drag.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  if (dist < 6) {
+    // click: place at rest
+    state.bodies.push(makeBody(state.drag.x, state.drag.y, 0, 0, state.newMass));
+  } else {
+    // slingshot: velocity opposite to drag, magnitude proportional to drag length
+    const speedScale = 0.15;
+    const vx = -dx * speedScale;
+    const vy = -dy * speedScale;
+    state.bodies.push(makeBody(state.drag.x, state.drag.y, vx, vy, state.newMass));
+  }
+  state.drag = null;
+});
+
+canvas.addEventListener("mouseleave", () => {
+  state.drag = null;
+});
+
+// Touch support
+canvas.addEventListener("touchstart", e => {
+  e.preventDefault();
+  const t = e.touches[0];
+  const p = getMouse(t);
+  state.drag = { x: p.x, y: p.y };
+  state.mouse.x = p.x; state.mouse.y = p.y;
+}, { passive: false });
+
+canvas.addEventListener("touchmove", e => {
+  e.preventDefault();
+  const t = e.touches[0];
+  const p = getMouse(t);
+  state.mouse.x = p.x; state.mouse.y = p.y;
+}, { passive: false });
+
+canvas.addEventListener("touchend", e => {
+  e.preventDefault();
+  if (!state.drag) return;
+  const p = state.mouse;
+  const dx = p.x - state.drag.x;
+  const dy = p.y - state.drag.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  if (dist < 6) {
+    state.bodies.push(makeBody(state.drag.x, state.drag.y, 0, 0, state.newMass));
+  } else {
+    state.bodies.push(makeBody(state.drag.x, state.drag.y, -dx * 0.15, -dy * 0.15, state.newMass));
+  }
+  state.drag = null;
+}, { passive: false });
+
+// ----- Init: auto-load Galaxy scene -----
+spawnGalaxy();
+loop();
+</script>
+
+</body>
+</html>
